@@ -24,7 +24,7 @@ THE SOFTWARE.
 
 package me.basiqueevangelist.multicam.client.owocode;
 
-import net.minecraft.util.math.MathHelper;
+import net.minecraft.util.Mth;
 
 import java.util.Arrays;
 import java.util.List;
@@ -63,7 +63,7 @@ public class Animation<A extends Animatable<A>> {
             else return;
         }
 
-        this.delta = MathHelper.clamp(this.delta + (delta * 50 / duration) * this.direction.multiplier, 0, 1);
+        this.delta = Mth.clamp(this.delta + (delta * 50 / duration) * this.direction.multiplier, 0, 1);
 
         this.setter.accept(this.from.interpolate(this.to, this.easing.apply(this.delta)));
     }
