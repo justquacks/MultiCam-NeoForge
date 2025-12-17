@@ -1,7 +1,7 @@
 package me.basiqueevangelist.windowapi.util;
 
 import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.systems.VertexSorter;
+import com.mojang.blaze3d.vertex.VertexSorting;
 import org.joml.Matrix4f;
 import org.lwjgl.glfw.GLFW;
 
@@ -19,12 +19,12 @@ public final class GlUtil {
         return () -> GLFW.glfwMakeContextCurrent(old);
     }
 
-    public static InfallibleCloseable setProjectionMatrix(Matrix4f projectionMatrix, VertexSorter sorter) {
+    public static InfallibleCloseable setProjectionMatrix(Matrix4f projectionMatrix) {
         Matrix4f oldMatrix = RenderSystem.getProjectionMatrix();
-        VertexSorter oldSorter = RenderSystem.getVertexSorting();
+        VertexSorting oldSorting = RenderSystem.getVertexSorting();
 
-        RenderSystem.setProjectionMatrix(projectionMatrix, sorter);
+        RenderSystem.setProjectionMatrix(projectionMatrix, VertexSorting.DISTANCE_TO_ORIGIN);
 
-        return () -> RenderSystem.setProjectionMatrix(oldMatrix, oldSorter);
+        return () -> RenderSystem.setProjectionMatrix(oldMatrix, oldSorting);
     }
 }
