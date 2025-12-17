@@ -1,17 +1,18 @@
 package me.basiqueevangelist.multicam.client.command.argument;
 
-import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Vec2f;
-import net.minecraft.util.math.Vec3d;
+import net.minecraft.client.multiplayer.ClientLevel;
+import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.phys.Vec2;
+import net.minecraft.world.phys.Vec3;
 
 public interface ClientPosArgument {
-    Vec3d toAbsolutePos(FabricClientCommandSource source);
+    Vec3 toAbsolutePos(LocalPlayer player, ClientLevel level);
 
-    Vec2f toAbsoluteRotation(FabricClientCommandSource source);
+    Vec2 toAbsoluteRotation(LocalPlayer player);
 
-    default BlockPos toAbsoluteBlockPos(FabricClientCommandSource source) {
-        return BlockPos.ofFloored(this.toAbsolutePos(source));
+    default BlockPos toAbsoluteBlockPos(LocalPlayer player, ClientLevel level) {
+        return BlockPos.containing(this.toAbsolutePos(player, level));
     }
 
     boolean isXRelative();
