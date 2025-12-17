@@ -1,17 +1,20 @@
 package me.basiqueevangelist.multicam.common;
 
 import io.netty.buffer.ByteBuf;
-import net.minecraft.network.codec.PacketCodec;
-import net.minecraft.network.codec.PacketCodecs;
-import net.minecraft.network.packet.CustomPayload;
+import net.minecraft.network.codec.ByteBufCodecs;
+import net.minecraft.network.codec.StreamCodec;
+import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
+import net.minecraft.resources.ResourceLocation;
 
-public record MultiCamUsageS2CPacket(boolean canUse) implements CustomPayload {
-    public static final CustomPayload.Id<MultiCamUsageS2CPacket> ID = new Id<>(MultiCamCommon.id("usage"));
-    public static final PacketCodec<ByteBuf, MultiCamUsageS2CPacket> PACKET_CODEC =
-        PacketCodecs.BOOL.xmap(MultiCamUsageS2CPacket::new, MultiCamUsageS2CPacket::canUse);
+public record MultiCamUsageS2CPacket(boolean canUse) implements CustomPacketPayload {
+    public static final CustomPacketPayload.Type<MultiCamUsageS2CPacket> TYPE = 
+        new CustomPacketPayload.Type<>(MultiCamCommon.id("usage"));
+    
+    public static final StreamCodec<ByteBuf, MultiCamUsageS2CPacket> STREAM_CODEC = 
+        ByteBufCodecs.BOOL.map(MultiCamUsageS2CPacket::new, MultiCamUsageS2CPacket::canUse);
 
     @Override
-    public Id<? extends CustomPayload> getId() {
-        return ID;
+    public Type<? extends CustomPacketPayload> type() {
+        return TYPE;
     }
 }
