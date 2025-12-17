@@ -1,15 +1,18 @@
 package me.basiqueevangelist.multicam.mixin.client;
 
-import net.minecraft.client.gl.PostEffectProcessor;
-import net.minecraft.client.render.WorldRenderer;
+import net.minecraft.client.renderer.LevelRenderer;
+import net.minecraft.client.renderer.PostChain;
+import org.jetbrains.annotations.Nullable;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.gen.Accessor;
 
-@Mixin(WorldRenderer.class)
+@Mixin(LevelRenderer.class)
 public interface WorldRendererAccessor {
-    @Accessor
-    PostEffectProcessor getEntityOutlinePostProcessor();
+    @Accessor("entityEffect")
+    @Nullable
+    PostChain getEntityOutlinePostProcessor();
 
-    @Accessor
-    PostEffectProcessor getTransparencyPostProcessor();
+    @Accessor("transparencyChain")
+    @Nullable
+    PostChain getTransparencyPostProcessor();
 }
