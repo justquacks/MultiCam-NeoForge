@@ -3,58 +3,63 @@ package me.basiqueevangelist.multicam.client;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gl.Framebuffer;
-import net.minecraft.client.gl.SimpleFramebuffer;
+import com.mojang.blaze3d.pipeline.RenderTarget;
+import com.mojang.blaze3d.pipeline.TextureTarget;
+import net.minecraft.client.Minecraft;
 import org.jetbrains.annotations.Nullable;
 
-public class DelegatingFramebuffer extends Framebuffer {
-    private final Framebuffer original;
-    private final LoadingCache<WorldViewComponent, Framebuffer> subFramebuffers;
-    private Framebuffer tracking;
+public class DelegatingFramebuffer extends RenderTarget {
+    private final RenderTarget original;
+    private final LoadingCache<WorldViewComponent, RenderTarget> subFramebuffers;
+    private RenderTarget tracking;
 
-
-    public DelegatingFramebuffer(Framebuffer tracking) {
-        super(tracking.useDepthAttachment);
+    public DelegatingFramebuffer(RenderTarget tracking) {
+        super(tracking.useDepth);
 
         switchTo(tracking);
         this.original = tracking;
 
         this.subFramebuffers = CacheBuilder.newBuilder()
-            .<WorldViewComponent, Framebuffer>removalListener(r -> {
-                if (r.getValue() == null) return;
+                .<WorldViewComponent, RenderTarget>removalListener(r -> {
+                    if (r.getValue() != null) {
+                        r.getValue().destroyBuffers();
+                    }
+                })
+                .weakKeys()
+                .build(CacheLoader.from(ctx -> {
+                    TextureTarget sub = new TextureTarget(
+                            ctx.framebuffer.viewWidth,
+                            ctx.framebuffer.viewHeight,
+                            true,
+                            Minecraft.ON_OSX
+                    );
 
-                r.getValue().delete();
-            })
-            .weakKeys()
-            .build(CacheLoader.from(ctx -> {
-                SimpleFramebuffer sub = new SimpleFramebuffer(ctx.framebuffer.textureWidth, ctx.framebuffer.textureHeight, original.useDepthAttachment, MinecraftClient.IS_SYSTEM_MAC);
-                sub.setClearColor(0.0F, 0.0F, 0.0F, 0.0F);
+                    sub.setClearColor(0.0F, 0.0F, 0.0F, 0.0F);
 
-                ctx.whenResized((newWidth, newHeight) -> sub.resize(newWidth, newHeight, MinecraftClient.IS_SYSTEM_MAC));
+                    ctx.whenResized((w, h) ->
+                            sub.resize(w, h, Minecraft.ON_OSX)
+                    );
 
-                return sub;
-            }));
+                    return sub;
+                }));
     }
 
     public void switchTo(@Nullable WorldViewComponent component) {
         if (component == null) {
-            switchTo(this.original);
+            switchTo(original);
         } else {
             switchTo(subFramebuffers.getUnchecked(component));
         }
     }
 
-    public void switchTo(Framebuffer tracking) {
+    public void switchTo(RenderTarget tracking) {
         this.tracking = tracking;
-        this.fbo = tracking.fbo;
-        this.colorAttachment = tracking.getColorAttachment();
-        this.depthAttachment = tracking.getDepthAttachment();
-        this.textureHeight = tracking.textureHeight;
-        this.textureWidth = tracking.textureWidth;
-        this.viewportHeight = tracking.viewportHeight;
-        this.viewportWidth = tracking.viewportWidth;
-        this.texFilter = tracking.texFilter;
+        this.frameBufferId = tracking.frameBufferId;
+        this.width = tracking.width;
+        this.height = tracking.height;
+        this.viewWidth = tracking.viewWidth;
+        this.viewHeight = tracking.viewHeight;
+        this.filterMode = tracking.filterMode;
     }
 
     @Override
@@ -63,48 +68,38 @@ public class DelegatingFramebuffer extends Framebuffer {
     }
 
     @Override
-    public void delete() {
-        tracking.delete();
+    public void destroyBuffers() {
+        tracking.destroyBuffers();
     }
 
     @Override
-    public void copyDepthFrom(Framebuffer framebuffer) {
-        tracking.copyDepthFrom(framebuffer);
+    public void setFilterMode(int filterMode) {
+        tracking.setFilterMode(filterMode);
     }
 
     @Override
-    public void initFbo(int width, int height, boolean getError) {
-        tracking.initFbo(width, height, getError);
+    public void checkStatus() {
+        tracking.checkStatus();
     }
 
     @Override
-    public void setTexFilter(int texFilter) {
-        tracking.setTexFilter(texFilter);
+    public void bindRead() {
+        tracking.bindRead();
     }
 
     @Override
-    public void checkFramebufferStatus() {
-        tracking.checkFramebufferStatus();
+    public void unbindRead() {
+        tracking.unbindRead();
     }
 
     @Override
-    public void beginRead() {
-        tracking.beginRead();
+    public void bindWrite(boolean setViewport) {
+        tracking.bindWrite(setViewport);
     }
 
     @Override
-    public void endRead() {
-        tracking.endRead();
-    }
-
-    @Override
-    public void beginWrite(boolean setViewport) {
-        tracking.beginWrite(setViewport);
-    }
-
-    @Override
-    public void endWrite() {
-        tracking.endWrite();
+    public void unbindWrite() {
+        tracking.unbindWrite();
     }
 
     @Override
@@ -113,13 +108,8 @@ public class DelegatingFramebuffer extends Framebuffer {
     }
 
     @Override
-    public void draw(int width, int height) {
-        tracking.draw(width, height);
-    }
-
-    @Override
-    public void draw(int width, int height, boolean disableBlend) {
-        tracking.draw(width, height, disableBlend);
+    public void blitToScreen(int width, int height) {
+        tracking.blitToScreen(width, height);
     }
 
     @Override
@@ -128,12 +118,7 @@ public class DelegatingFramebuffer extends Framebuffer {
     }
 
     @Override
-    public int getColorAttachment() {
-        return tracking.getColorAttachment();
-    }
-
-    @Override
-    public int getDepthAttachment() {
-        return tracking.getDepthAttachment();
+    public int getColorTextureId() {
+        return tracking.getColorTextureId();
     }
 }
