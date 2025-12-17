@@ -1,6 +1,5 @@
 package me.basiqueevangelist.multicam.client.command;
 
-import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.builder.ArgumentBuilder;
 import me.basiqueevangelist.multicam.client.AnimatableFloat;
 import me.basiqueevangelist.multicam.client.AnimatableVec3d;
@@ -8,15 +7,18 @@ import me.basiqueevangelist.multicam.client.CameraWindow;
 import me.basiqueevangelist.multicam.client.command.argument.ClientPosArgument;
 import me.basiqueevangelist.multicam.client.command.argument.ClientRotationArgumentType;
 import me.basiqueevangelist.multicam.client.command.argument.ClientVec3ArgumentType;
-import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
-import net.minecraft.util.math.Vec2f;
-import net.minecraft.util.math.Vec3d;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.multiplayer.ClientLevel;
+import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.commands.CommandSourceStack;
+import net.minecraft.world.phys.Vec2;
+import net.minecraft.world.phys.Vec3;
 
-import static net.fabricmc.fabric.api.client.command.v2.ClientCommandManager.argument;
-import static net.fabricmc.fabric.api.client.command.v2.ClientCommandManager.literal;
+import static net.minecraft.commands.Commands.argument;
+import static net.minecraft.commands.Commands.literal;
 
 public class MoveCameraCommand {
-    public static ArgumentBuilder<FabricClientCommandSource, ?> build() {
+    public static ArgumentBuilder<CommandSourceStack, ?> build() {
         var cameraNode = CommandUtil.cameraNode();
 
         CommandUtil.addInAt(cameraNode, configurer -> literal("to")
@@ -24,8 +26,10 @@ public class MoveCameraCommand {
                 .executes(ctx -> {
                     CameraWindow camera = CommandUtil.getCamera(ctx);
 
-                    FabricClientCommandSource cameraSrc = CommandUtil.getSourceForCamera(ctx.getSource(), camera);
-                    Vec3d pos = ClientVec3ArgumentType.getPosArgument(ctx, "position").toAbsolutePos(cameraSrc);
+                    LocalPlayer player = Minecraft.getInstance().player;
+                    ClientLevel level = Minecraft.getInstance().level;
+                    
+                    Vec3 pos = ClientVec3ArgumentType.getPosArgument(ctx, "position").toAbsolutePos(player, level);
 
                     configurer.configureAnimation(
                         ctx,
@@ -40,12 +44,13 @@ public class MoveCameraCommand {
                     .executes(ctx -> {
                         CameraWindow camera = CommandUtil.getCamera(ctx);
 
-                        FabricClientCommandSource cameraSrc = CommandUtil.getSourceForCamera(ctx.getSource(), camera);
+                        LocalPlayer player = Minecraft.getInstance().player;
+                        ClientLevel level = Minecraft.getInstance().level;
 
-                        Vec3d pos = ClientVec3ArgumentType.getPosArgument(ctx, "position").toAbsolutePos(cameraSrc);
+                        Vec3 pos = ClientVec3ArgumentType.getPosArgument(ctx, "position").toAbsolutePos(player, level);
                         ClientPosArgument rotArg = ClientRotationArgumentType.getRotation(ctx, "rotation");
 
-                        Vec2f rot = rotArg.toAbsoluteRotation(cameraSrc);
+                        Vec2 rot = rotArg.toAbsoluteRotation(player);
 
                         configurer.configureAnimation(
                             ctx,
@@ -73,5 +78,4 @@ public class MoveCameraCommand {
 
         return literal("move").then(cameraNode);
     }
-
 }
