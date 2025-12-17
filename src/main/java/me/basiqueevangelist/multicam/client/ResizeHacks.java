@@ -1,12 +1,14 @@
 package me.basiqueevangelist.multicam.client;
 
+import java.lang.reflect.Field;
+
 import me.basiqueevangelist.multicam.mixin.client.PostEffectProcessorAccessor;
 import me.basiqueevangelist.multicam.mixin.client.WorldRendererAccessor;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gl.PostEffectPass;
-import net.minecraft.client.gl.PostEffectProcessor;
-import net.minecraft.client.render.GameRenderer;
-import net.minecraft.client.render.WorldRenderer;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.renderer.GameRenderer;
+import net.minecraft.client.renderer.LevelRenderer;
+import net.minecraft.client.renderer.PostChain;
+import net.minecraft.client.renderer.PostPass;
 import org.jetbrains.annotations.Nullable;
 import org.joml.Matrix4f;
 
@@ -16,28 +18,36 @@ public final class ResizeHacks {
     }
 
     public static void resize(GameRenderer renderer, @Nullable WorldViewComponent ctx) {
-        if (renderer.getPostProcessor() != null) {
-            resize(renderer.getPostProcessor(), ctx);
+        if (renderer.currentEffect() != null) {
+            resize(renderer.currentEffect(), ctx);
         }
 
-        resize(renderer.getClient().worldRenderer, ctx);
+        resize(renderer.getMinecraft().levelRenderer, ctx);
     }
 
-    public static void resize(WorldRenderer renderer, @Nullable WorldViewComponent ctx) {
-        // this.scheduleTerrainUpdate();
+    public static void resize(LevelRenderer renderer, @Nullable WorldViewComponent ctx) {
+        try {
+            Field entityEffectField = LevelRenderer.class.getDeclaredField("entityEffect");
+            entityEffectField.setAccessible(true);
+            PostChain entityOutlineProcessor = (PostChain) entityEffectField.get(renderer);
+            
+            if (entityOutlineProcessor != null) {
+                resize(entityOutlineProcessor, ctx);
+            }
 
-        var entityOutlineProcessor = ((WorldRendererAccessor) renderer).getEntityOutlinePostProcessor();
-        if (entityOutlineProcessor != null) {
-            resize(entityOutlineProcessor, ctx);
-        }
-
-        var transparencyProcessor = ((WorldRendererAccessor) renderer).getTransparencyPostProcessor();
-        if (transparencyProcessor != null) {
-            resize(transparencyProcessor, ctx);
+            Field transparencyField = LevelRenderer.class.getDeclaredField("transparencyChain");
+            transparencyField.setAccessible(true);
+            PostChain transparencyProcessor = (PostChain) transparencyField.get(renderer);
+            
+            if (transparencyProcessor != null) {
+                resize(transparencyProcessor, ctx);
+            }
+        } catch (Exception e) {
+            System.out.println("Failed to access LevelRenderer fields: " + e.getMessage());
         }
     }
 
-    public static void resize(PostEffectProcessor processor, @Nullable WorldViewComponent ctx) {
+    public static void resize(PostChain processor, @Nullable WorldViewComponent ctx) {
         PostEffectProcessorAccessor duck = (PostEffectProcessorAccessor) processor;
 
         duck.setWidth(width(ctx));
@@ -57,8 +67,8 @@ public final class ResizeHacks {
         if (duck.getMainTarget() instanceof DelegatingFramebuffer deleg)
             deleg.switchTo(ctx);
 
-        for (PostEffectPass pass : duck.getPasses()) {
-            pass.setProjectionMatrix(projectionMatrix);
+        for (PostPass pass : duck.getPasses()) {
+            pass.setOrthoMatrix(projectionMatrix);
         }
 
         for (var target : duck.getDefaultSizedTargets()) {
@@ -68,10 +78,10 @@ public final class ResizeHacks {
     }
 
     private static int width(@Nullable WorldViewComponent ctx) {
-        return ctx == null ? MinecraftClient.getInstance().getWindow().getFramebufferWidth() : ctx.framebuffer.textureWidth;
+        return ctx == null ? Minecraft.getInstance().getWindow().getWidth() : ctx.framebuffer.width;
     }
 
     private static int height(@Nullable WorldViewComponent ctx) {
-        return ctx == null ? MinecraftClient.getInstance().getWindow().getFramebufferHeight() : ctx.framebuffer.textureHeight;
+        return ctx == null ? Minecraft.getInstance().getWindow().getHeight() : ctx.framebuffer.height;
     }
 }
