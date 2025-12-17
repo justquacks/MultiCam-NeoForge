@@ -1,29 +1,35 @@
 package me.basiqueevangelist.multicam.common;
 
-import me.lucko.fabric.api.permissions.v0.Permissions;
-import net.fabricmc.api.ModInitializer;
-import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
-import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.util.Identifier;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.level.ServerPlayer;
+import net.neoforged.bus.api.IEventBus;
+import net.neoforged.fml.common.Mod;
+import net.neoforged.neoforge.network.PacketDistributor;
+import net.neoforged.neoforge.server.permission.PermissionAPI;
+import net.neoforged.neoforge.server.permission.nodes.PermissionNode;
+import net.neoforged.neoforge.server.permission.nodes.PermissionTypes;
 
-public class MultiCamCommon implements ModInitializer {
-    public static Identifier id(String path) {
-        return Identifier.of("multicam", path);
+@Mod("multicam")
+public class MultiCamCommon {
+    public static final String MOD_ID = "multicam";
+    
+    public static final PermissionNode<Boolean> USE_PERMISSION = new PermissionNode<>(
+        MOD_ID,
+        "use",
+        PermissionTypes.BOOLEAN,
+        (player, uuid, context) -> player != null && player.hasPermissions(2)
+    );
+
+    public MultiCamCommon(IEventBus modEventBus) {
+        //I have no idea why this is empty. Claude did this. Blame AL
     }
 
-    @Override
-    public void onInitialize() {
-        PayloadTypeRegistry.playS2C().register(MultiCamUsageS2CPacket.ID, MultiCamUsageS2CPacket.PACKET_CODEC);
+    public static ResourceLocation id(String path) {
+        return ResourceLocation.fromNamespaceAndPath(MOD_ID, path);
     }
 
-    public static void sendUsagePacket(ServerPlayerEntity player) {
-        boolean canUse = Permissions.check(player, "multicam.use", 2);
-
-        // Always let the singleplayer host use the mod.
-        if (player.getServer().isHost(player.getGameProfile()))
-            canUse = true;
-
-        ServerPlayNetworking.send(player, new MultiCamUsageS2CPacket(canUse));
+    public static void sendUsagePacket(ServerPlayer player) {
+        boolean canUse = PermissionAPI.getPermission(player, USE_PERMISSION);
+        PacketDistributor.sendToPlayer(player, new MultiCamUsageS2CPacket(canUse));
     }
 }
