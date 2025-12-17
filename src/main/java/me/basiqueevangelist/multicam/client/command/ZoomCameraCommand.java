@@ -4,13 +4,13 @@ import com.mojang.brigadier.arguments.FloatArgumentType;
 import com.mojang.brigadier.builder.ArgumentBuilder;
 import me.basiqueevangelist.multicam.client.AnimatableFloat;
 import me.basiqueevangelist.multicam.client.CameraWindow;
-import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
+import net.minecraft.commands.CommandSourceStack;
 
-import static net.fabricmc.fabric.api.client.command.v2.ClientCommandManager.argument;
-import static net.fabricmc.fabric.api.client.command.v2.ClientCommandManager.literal;
+import static net.minecraft.commands.Commands.argument;
+import static net.minecraft.commands.Commands.literal;
 
 public class ZoomCameraCommand {
-    public static ArgumentBuilder<FabricClientCommandSource, ?> build() {
+    public static ArgumentBuilder<CommandSourceStack, ?> build() {
         var cameraNode = CommandUtil.cameraNode();
 
         CommandUtil.addInAt(cameraNode, configurer ->
