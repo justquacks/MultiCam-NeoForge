@@ -10,8 +10,8 @@ import com.mojang.brigadier.suggestion.Suggestions;
 import com.mojang.brigadier.suggestion.SuggestionsBuilder;
 import it.unimi.dsi.fastutil.objects.Object2IntMap;
 import it.unimi.dsi.fastutil.objects.Object2IntOpenHashMap;
-import net.minecraft.command.CommandSource;
-import net.minecraft.text.Text;
+import net.minecraft.commands.SharedSuggestionProvider;
+import net.minecraft.network.chat.Component;
 
 import java.util.Arrays;
 import java.util.Collection;
@@ -19,9 +19,9 @@ import java.util.concurrent.CompletableFuture;
 
 public class MsTimeArgumentType implements ArgumentType<Integer> {
     private static final Collection<String> EXAMPLES = Arrays.asList("0d", "0s", "0t", "0ms", "0");
-    private static final SimpleCommandExceptionType INVALID_UNIT_EXCEPTION = new SimpleCommandExceptionType(Text.translatable("argument.time.invalid_unit"));
+    private static final SimpleCommandExceptionType INVALID_UNIT_EXCEPTION = new SimpleCommandExceptionType(Component.translatable("argument.time.invalid_unit"));
     private static final Dynamic2CommandExceptionType TICK_COUNT_TOO_LOW_EXCEPTION = new Dynamic2CommandExceptionType(
-        (value, minimum) -> Text.stringifiedTranslatable("argument.time.tick_count_too_low", minimum, value)
+        (value, minimum) -> Component.translatable("argument.time.tick_count_too_low", minimum, value)
     );
     private static final Object2IntMap<String> UNITS = new Object2IntOpenHashMap<>();
     final int minimum;
@@ -64,7 +64,7 @@ public class MsTimeArgumentType implements ArgumentType<Integer> {
             return builder.buildFuture();
         }
 
-        return CommandSource.suggestMatching(UNITS.keySet(), builder.createOffset(builder.getStart() + stringReader.getCursor()));
+        return SharedSuggestionProvider.suggest(UNITS.keySet(), builder.createOffset(builder.getStart() + stringReader.getCursor()));
     }
 
     @Override
