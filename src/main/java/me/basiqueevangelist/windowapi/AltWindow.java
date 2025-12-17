@@ -1,23 +1,23 @@
 package me.basiqueevangelist.windowapi;
 
+import com.mojang.blaze3d.platform.GlStateManager;
 import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.systems.VertexSorter;
+import com.mojang.blaze3d.vertex.VertexSorting;
 import me.basiqueevangelist.windowapi.context.CurrentWindowContext;
 import me.basiqueevangelist.windowapi.context.WindowContext;
 import me.basiqueevangelist.windowapi.util.GlUtil;
-import net.fabricmc.fabric.api.event.Event;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gl.Framebuffer;
-import net.minecraft.client.gl.GlDebug;
-import net.minecraft.client.gl.SimpleFramebuffer;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.Drawable;
-import net.minecraft.client.gui.Element;
-import net.minecraft.client.render.DiffuseLighting;
-import net.minecraft.client.render.Tessellator;
-import net.minecraft.client.texture.NativeImage;
-import net.minecraft.client.util.InputUtil;
-import net.minecraft.util.Pair;
+import net.minecraft.client.Minecraft;
+import com.mojang.blaze3d.pipeline.RenderTarget;
+import com.mojang.blaze3d.pipeline.MainTarget;
+import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.components.Renderable;
+import net.minecraft.client.gui.components.events.GuiEventListener;
+import net.minecraft.client.renderer.LightTexture;
+import net.minecraft.client.renderer.MultiBufferSource;
+import net.minecraft.util.GsonHelper;
+import com.mojang.blaze3d.platform.NativeImage;
+import com.mojang.blaze3d.platform.InputConstants;
+import org.apache.commons.lang3.tuple.Pair;
 import org.joml.Matrix4f;
 import org.joml.Matrix4fStack;
 import org.lwjgl.glfw.*;
@@ -29,11 +29,11 @@ import org.lwjgl.system.NativeResource;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Consumer;
 
 import static org.lwjgl.glfw.GLFW.*;
-import static org.lwjgl.glfw.GLFW.glfwSetCharModsCallback;
 
-public abstract class AltWindow extends SupportsFeaturesImpl<WindowContext> implements WindowContext, Drawable, Element {
+public abstract class AltWindow extends SupportsFeaturesImpl<WindowContext> implements WindowContext, Renderable, GuiEventListener {
     private static final boolean USE_GLOBAL_POS = glfwGetPlatform() != GLFW_PLATFORM_WAYLAND;
 
     private String title = "window api window";
@@ -46,10 +46,10 @@ public abstract class AltWindow extends SupportsFeaturesImpl<WindowContext> impl
     private int framebufferHeight;
 
     private long handle = 0;
-    private Framebuffer framebuffer;
+    private RenderTarget framebuffer;
     private int localFramebuffer = 0;
     private final List<NativeResource> disposeList = new ArrayList<>();
-    private final MinecraftClient client = MinecraftClient.getInstance();
+    private final Minecraft client = Minecraft.getInstance();
 
     private int scaleFactor;
     private int scaledWidth;
@@ -68,7 +68,7 @@ public abstract class AltWindow extends SupportsFeaturesImpl<WindowContext> impl
     private final int[] globalX = new int[1];
     private final int[] globalY = new int[1];
 
-    private final Event<WindowFramebufferResized> framebufferResizedEvents = WindowFramebufferResized.newEvent();
+    private final List<Consumer<WindowFramebufferResized>> framebufferResizedEvents = new ArrayList<>();
 
     public AltWindow() {
 
@@ -118,7 +118,7 @@ public abstract class AltWindow extends SupportsFeaturesImpl<WindowContext> impl
             throw new IllegalStateException("Tried to add window hint after window was opened");
         }
 
-        windowHints.add(new Pair<>(hint, value));
+        windowHints.add(Pair.of(hint, value));
 
         return this;
     }
@@ -137,7 +137,7 @@ public abstract class AltWindow extends SupportsFeaturesImpl<WindowContext> impl
                 glfwWindowHint(hint.getLeft(), hint.getRight());
             }
 
-            this.handle = glfwCreateWindow(this.screenWidth, this.screenHeight, this.title, 0, MinecraftClient.getInstance().getWindow().getHandle());
+            this.handle = glfwCreateWindow(this.screenWidth, this.screenHeight, this.title, 0, Minecraft.getInstance().getWindow().getWindow());
 
             if (this.handle == 0) {
                 throw new IllegalStateException("OwoWindow creation failed due to GLFW error");
@@ -155,10 +155,10 @@ public abstract class AltWindow extends SupportsFeaturesImpl<WindowContext> impl
         this.framebufferWidth = framebufferWidthArr[0];
         this.framebufferHeight = framebufferHeightArr[0];
 
-        this.framebuffer = new SimpleFramebuffer(this.framebufferWidth, this.framebufferHeight, true, MinecraftClient.IS_SYSTEM_MAC);
-
+        // FIX: Create framebuffer in THIS window's context, not the main window's
         try (var ignored = GlUtil.setContext(this.handle)) {
-            GlDebug.enableDebug(client.options.glDebugVerbosity, true);
+            this.framebuffer = new MainTarget(this.framebufferWidth, this.framebufferHeight);
+            // GlDebug is no longer available in 1.21, skip this
         }
 
         initLocalFramebuffer();
@@ -182,10 +182,10 @@ public abstract class AltWindow extends SupportsFeaturesImpl<WindowContext> impl
             this.framebufferWidth = width;
             this.framebufferHeight = height;
 
-            try (var ignored = GlUtil.setContext(client.getWindow().getHandle())) {
-                framebuffer.delete();
-
-                this.framebuffer = new SimpleFramebuffer(width, height, true, MinecraftClient.IS_SYSTEM_MAC);
+            // FIX: Recreate framebuffer in THIS window's context, not the main window's
+            try (var ignored = GlUtil.setContext(this.handle)) {
+                framebuffer.destroyBuffers();
+                this.framebuffer = new MainTarget(width, height);
             }
 
             initLocalFramebuffer();
@@ -195,7 +195,9 @@ public abstract class AltWindow extends SupportsFeaturesImpl<WindowContext> impl
             try (var ignored = CurrentWindowContext.setCurrent(this)) {
                 this.resize(scaledWidth(), scaledHeight());
 
-                this.framebufferResizedEvents.invoker().onFramebufferResized(width, height);
+                for (var listener : framebufferResizedEvents) {
+                    listener.accept(new WindowFramebufferResized(width, height));
+                }
             }
         })));
 
@@ -205,7 +207,6 @@ public abstract class AltWindow extends SupportsFeaturesImpl<WindowContext> impl
                 GLFW.glfwSetCursorPos(handle(), mouseX * scaleFactor, mouseY * scaleFactor);
                 return;
             }
-
 
             int newX = (int) (xpos / scaleFactor);
             int newY = (int) (ypos / scaleFactor);
@@ -247,10 +248,10 @@ public abstract class AltWindow extends SupportsFeaturesImpl<WindowContext> impl
 
         glfwSetScrollCallback(handle, stowAndReturn(GLFWScrollCallback.create((window, xoffset, yoffset) -> {
             try (var ignored = CurrentWindowContext.setCurrent(this)) {
-                double yAmount = (client.options.getDiscreteMouseScroll().getValue() ? Math.signum(yoffset) : yoffset)
-                    * client.options.getMouseWheelSensitivity().getValue();
-                double xAmount = (client.options.getDiscreteMouseScroll().getValue() ? Math.signum(xoffset) : xoffset)
-                    * client.options.getMouseWheelSensitivity().getValue();
+                double yAmount = (client.options.discreteMouseScroll().get() ? Math.signum(yoffset) : yoffset)
+                    * client.options.mouseWheelSensitivity().get();
+                double xAmount = (client.options.discreteMouseScroll().get() ? Math.signum(xoffset) : xoffset)
+                    * client.options.mouseWheelSensitivity().get();
                 this.mouseScrolled(mouseX, mouseY, xAmount, yAmount);
             }
         })));
@@ -290,7 +291,7 @@ public abstract class AltWindow extends SupportsFeaturesImpl<WindowContext> impl
         this.cursorLocked = true;
         this.mouseX = scaledWidth / 2;
         this.mouseY = scaledHeight / 2;
-        InputUtil.setCursorParameters(handle, InputUtil.GLFW_CURSOR_DISABLED, this.mouseX * scaleFactor, this.mouseY * scaleFactor);
+        InputConstants.grabOrReleaseMouse(handle, GLFW_CURSOR_DISABLED, this.mouseX * scaleFactor, this.mouseY * scaleFactor);
     }
 
     public void unlockCursor() {
@@ -298,7 +299,7 @@ public abstract class AltWindow extends SupportsFeaturesImpl<WindowContext> impl
 
         this.mouseX = scaledWidth / 2;
         this.mouseY = scaledHeight / 2;
-        InputUtil.setCursorParameters(handle, InputUtil.GLFW_CURSOR_NORMAL, this.mouseX * scaleFactor, this.mouseY * scaleFactor);
+        InputConstants.grabOrReleaseMouse(handle, GLFW_CURSOR_NORMAL, this.mouseX * scaleFactor, this.mouseY * scaleFactor);
         this.cursorLocked = false;
     }
 
@@ -320,7 +321,7 @@ public abstract class AltWindow extends SupportsFeaturesImpl<WindowContext> impl
                 NativeImage icon = icons.get(i);
                 ByteBuffer imgBuffer = MemoryUtil.memAlloc(icon.getWidth() * icon.getHeight() * 4);
                 freeList.add(imgBuffer);
-                imgBuffer.asIntBuffer().put(icon.copyPixelsRgba());
+                imgBuffer.asIntBuffer().put(icon.getPixelsRGBA());
 
                 buffer
                     .position(i)
@@ -346,7 +347,7 @@ public abstract class AltWindow extends SupportsFeaturesImpl<WindowContext> impl
 
             this.localFramebuffer = GL32.glGenFramebuffers();
             GL32.glBindFramebuffer(GL32.GL_FRAMEBUFFER, this.localFramebuffer);
-            GL32.glFramebufferTexture2D(GL32.GL_FRAMEBUFFER, GL32.GL_COLOR_ATTACHMENT0, GL32.GL_TEXTURE_2D, this.framebuffer.getColorAttachment(), 0);
+            GL32.glFramebufferTexture2D(GL32.GL_FRAMEBUFFER, GL32.GL_COLOR_ATTACHMENT0, GL32.GL_TEXTURE_2D, this.framebuffer.getColorTextureId(), 0);
 
             int status = GL32.glCheckFramebufferStatus(GL32.GL_FRAMEBUFFER);
             if (status != GL32.GL_FRAMEBUFFER_COMPLETE)
@@ -355,8 +356,8 @@ public abstract class AltWindow extends SupportsFeaturesImpl<WindowContext> impl
     }
 
     public void recalculateScale() {
-        int guiScale = MinecraftClient.getInstance().options.getGuiScale().getValue();
-        boolean forceUnicodeFont = MinecraftClient.getInstance().options.getForceUnicodeFont().getValue();
+        int guiScale = Minecraft.getInstance().options.guiScale().get();
+        boolean forceUnicodeFont = Minecraft.getInstance().options.forceUnicodeFont().get();
 
         int factor = 1;
 
@@ -396,10 +397,10 @@ public abstract class AltWindow extends SupportsFeaturesImpl<WindowContext> impl
         try (var ignored = CurrentWindowContext.setCurrent(this)) {
             tickMouse();
 
-            framebuffer().beginWrite(true);
+            framebuffer().bindWrite(true);
 
             RenderSystem.clearColor(0, 0, 0, 0);
-            RenderSystem.clear(GL32.GL_COLOR_BUFFER_BIT | GL32.GL_DEPTH_BUFFER_BIT, MinecraftClient.IS_SYSTEM_MAC);
+            RenderSystem.clear(GL32.GL_COLOR_BUFFER_BIT | GL32.GL_DEPTH_BUFFER_BIT, Minecraft.ON_OSX);
 
             Matrix4f matrix4f = new Matrix4f()
                 .setOrtho(
@@ -411,42 +412,49 @@ public abstract class AltWindow extends SupportsFeaturesImpl<WindowContext> impl
                     21000.0F
                 );
 
-            try (var ignored2 = GlUtil.setProjectionMatrix(matrix4f, VertexSorter.BY_Z)) {
+            try (var ignored2 = GlUtil.setProjectionMatrix(matrix4f)) {
                 Matrix4fStack matrixStack = RenderSystem.getModelViewStack();
                 matrixStack.pushMatrix();
                 matrixStack.identity();
                 matrixStack.translate(0.0F, 0.0F, -11000.0F);
                 RenderSystem.applyModelViewMatrix();
-                DiffuseLighting.enableGuiDepthLighting();
+                
+                client.gameRenderer.lightTexture().turnOnLightLayer();
 
-                var consumers = client.getBufferBuilders().getEntityVertexConsumers();
-                this.render(new DrawContext(client, consumers), mouseX, mouseY, client.getRenderTickCounter().getTickDelta(false));
-                consumers.draw();
+                MultiBufferSource.BufferSource consumers = client.renderBuffers().bufferSource();
+                this.render(new GuiGraphics(client, consumers), mouseX, mouseY, client.getTimer().getGameTimeDeltaPartialTick(false));
+                consumers.endBatch();
 
                 RenderSystem.getModelViewStack().popMatrix();
                 RenderSystem.applyModelViewMatrix();
             }
 
-            framebuffer.endWrite();
+            framebuffer.unbindWrite();
         }
     }
 
     void present() {
         if (closed()) return;
 
-        GLFW.glfwMakeContextCurrent(this.handle);
-        // This code intentionally doesn't use Minecraft's RenderSystem
-        // class, as it caches GL state that is invalid on this context.
-        GL32.glBindFramebuffer(GL32.GL_READ_FRAMEBUFFER, localFramebuffer);
-        GL32.glBindFramebuffer(GL32.GL_DRAW_FRAMEBUFFER, 0);
+        try (var ignored = GlUtil.setContext(this.handle)) {
+            // Bind framebuffers for blitting
+            GL32.glBindFramebuffer(GL32.GL_READ_FRAMEBUFFER, localFramebuffer);
+            GL32.glBindFramebuffer(GL32.GL_DRAW_FRAMEBUFFER, 0);
 
-        GL32.glClearColor(1, 1, 1, 1);
-        GL32.glClear(GL32.GL_COLOR_BUFFER_BIT | GL32.GL_DEPTH_BUFFER_BIT);
-        GL32.glBlitFramebuffer(0, 0, this.framebufferWidth, this.framebufferHeight, 0, 0, this.framebufferWidth, this.framebufferHeight, GL32.GL_COLOR_BUFFER_BIT, GL32.GL_NEAREST);
+            // Clear the window's default framebuffer
+            GL32.glClearColor(1, 1, 1, 1);
+            GL32.glClear(GL32.GL_COLOR_BUFFER_BIT | GL32.GL_DEPTH_BUFFER_BIT);
+            
+            // Blit from our framebuffer to the window
+            GL32.glBlitFramebuffer(
+                0, 0, this.framebufferWidth, this.framebufferHeight, 
+                0, 0, this.framebufferWidth, this.framebufferHeight, 
+                GL32.GL_COLOR_BUFFER_BIT, GL32.GL_NEAREST
+            );
 
-        // Intentionally doesn't poll events so that all events are on the main window
-        Tessellator.getInstance().clear();
-        GLFW.glfwSwapBuffers(this.handle);
+            // Swap buffers
+            GLFW.glfwSwapBuffers(this.handle);
+        }
     }
 
     @Override
@@ -454,13 +462,17 @@ public abstract class AltWindow extends SupportsFeaturesImpl<WindowContext> impl
         return handle;
     }
 
-    @Override
-    public Event<WindowFramebufferResized> framebufferResized() {
-        return framebufferResizedEvents;
+    public void addFramebufferResizedListener(Consumer<WindowFramebufferResized> listener) {
+        framebufferResizedEvents.add(listener);
     }
 
     @Override
-    public Framebuffer framebuffer() {
+    public void onFramebufferResized(Consumer<WindowContext> listener) {
+        framebufferResizedEvents.add(event -> listener.accept(this));
+    }
+
+    @Override
+    public RenderTarget framebuffer() {
         return framebuffer;
     }
 
@@ -501,11 +513,60 @@ public abstract class AltWindow extends SupportsFeaturesImpl<WindowContext> impl
             GL32.glDeleteFramebuffers(this.localFramebuffer);
         }
 
-        this.framebuffer.delete();
+        this.framebuffer.destroyBuffers();
         glfwDestroyWindow(this.handle);
         this.handle = 0;
 
         this.disposeList.forEach(NativeResource::free);
         this.disposeList.clear();
+    }
+
+    // GuiEventListener implementation stubs
+    @Override
+    public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        return false;
+    }
+
+    @Override
+    public boolean mouseReleased(double mouseX, double mouseY, int button) {
+        return false;
+    }
+
+    @Override
+    public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
+        return false;
+    }
+
+    @Override
+    public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
+        return false;
+    }
+
+    @Override
+    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+        return false;
+    }
+
+    @Override
+    public boolean keyReleased(int keyCode, int scanCode, int modifiers) {
+        return false;
+    }
+
+    @Override
+    public boolean charTyped(char codePoint, int modifiers) {
+        return false;
+    }
+
+    @Override
+    public void mouseMoved(double mouseX, double mouseY) {
+    }
+
+    @Override
+    public void setFocused(boolean focused) {
+    }
+
+    @Override
+    public boolean isFocused() {
+        return false;
     }
 }
