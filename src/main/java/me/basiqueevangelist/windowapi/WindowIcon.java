@@ -1,61 +1,38 @@
 package me.basiqueevangelist.windowapi;
 
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.texture.NativeImage;
-import net.minecraft.util.Identifier;
+import com.mojang.blaze3d.platform.NativeImage;
+import net.minecraft.client.Minecraft;
+import net.minecraft.resources.ResourceLocation;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
 public interface WindowIcon {
-    static WindowIcon fromResources(Identifier... iconIds) {
+    static WindowIcon fromResources(ResourceLocation... iconIds) {
         return fromResources(List.of(iconIds));
     }
 
-    static WindowIcon fromResources(List<Identifier> iconIds) {
-        return new WindowIcon() {
-            @Override
-            public List<NativeImage> listIconImages() {
-                List<NativeImage> iconImages = new ArrayList<>(iconIds.size());
-
-                for (Identifier iconId : iconIds) {
-                    var icon = MinecraftClient.getInstance().getResourceManager().getResource(iconId).orElse(null);
-
-                    if (icon == null) continue;
-
-                    try {
-                        iconImages.add(NativeImage.read(icon.getInputStream()));
-                    } catch (IOException e) {
-                        throw new RuntimeException("Couldn't open icon " + iconId, e);
-                    }
+    static WindowIcon fromResources(List<ResourceLocation> iconIds) {
+        return () -> {
+            List<NativeImage> images = new ArrayList<>(iconIds.size());
+            var rm = Minecraft.getInstance().getResourceManager();
+            for (var id : iconIds) {
+                var res = rm.getResource(id);
+                if (res.isEmpty()) continue;
+                try {
+                    images.add(NativeImage.read(res.get().open()));
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
                 }
-
-                return iconImages;
             }
-
-            @Override
-            public boolean closeAfterUse() {
-                return true;
-            }
-        };
-    }
-
-    static WindowIcon fromNativeImages(List<NativeImage> icons, boolean closeAfterUse) {
-        return new WindowIcon() {
-            @Override
-            public List<NativeImage> listIconImages() {
-                return icons;
-            }
-
-            @Override
-            public boolean closeAfterUse() {
-                return closeAfterUse;
-            }
+            return images;
         };
     }
 
     List<NativeImage> listIconImages();
 
-    boolean closeAfterUse();
+    default boolean closeAfterUse() {
+        return true;
+    }
 }
