@@ -1,31 +1,45 @@
 package me.basiqueevangelist.multicam.mixin.client;
 
-import net.minecraft.client.gl.Framebuffer;
-import net.minecraft.client.gl.PostEffectPass;
-import net.minecraft.client.gl.PostEffectProcessor;
+import com.mojang.blaze3d.pipeline.RenderTarget;
+import net.minecraft.client.renderer.PostChain;
+import net.minecraft.client.renderer.PostPass;
 import org.joml.Matrix4f;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.gen.Accessor;
 
 import java.util.List;
+import java.util.Map;
 
-@Mixin(PostEffectProcessor.class)
+@Mixin(PostChain.class)
 public interface PostEffectProcessorAccessor {
-    @Accessor
-    List<PostEffectPass> getPasses();
-
-    @Accessor
-    List<Framebuffer> getDefaultSizedTargets();
-
-    @Accessor
-    Framebuffer getMainTarget();
-
-    @Accessor
-    void setProjectionMatrix(Matrix4f projectionMatrix);
-
-    @Accessor
+    
+    @Accessor("screenWidth")
+    int getWidth();
+    
+    @Accessor("screenWidth")
     void setWidth(int width);
-
-    @Accessor
+    
+    @Accessor("screenHeight")
+    int getHeight();
+    
+    @Accessor("screenHeight")
     void setHeight(int height);
+    
+    @Accessor("shaderOrthoMatrix")
+    Matrix4f getProjectionMatrix();
+    
+    @Accessor("shaderOrthoMatrix")
+    void setProjectionMatrix(Matrix4f matrix);
+    
+    @Accessor("passes")
+    List<PostPass> getPasses();
+    
+    @Accessor("fullSizedTargets")
+    List<RenderTarget> getDefaultSizedTargets();
+    
+    @Accessor("screenTarget")
+    RenderTarget getMainTarget();
+    
+    @Accessor("customRenderTargets")
+    Map<String, RenderTarget> getCustomRenderTargets();
 }
