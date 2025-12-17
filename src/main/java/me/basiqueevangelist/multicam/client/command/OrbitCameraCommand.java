@@ -1,19 +1,20 @@
 package me.basiqueevangelist.multicam.client.command;
 
 import com.mojang.brigadier.arguments.FloatArgumentType;
-import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.builder.ArgumentBuilder;
 import me.basiqueevangelist.multicam.client.CameraWindow;
 import me.basiqueevangelist.multicam.client.command.argument.ClientVec3ArgumentType;
-import net.fabricmc.fabric.api.client.command.v2.ClientCommandManager;
-import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
-import net.minecraft.util.math.Vec3d;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.multiplayer.ClientLevel;
+import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.commands.CommandSourceStack;
+import net.minecraft.world.phys.Vec3;
 
-import static net.fabricmc.fabric.api.client.command.v2.ClientCommandManager.argument;
-import static net.fabricmc.fabric.api.client.command.v2.ClientCommandManager.literal;
+import static net.minecraft.commands.Commands.argument;
+import static net.minecraft.commands.Commands.literal;
 
 public class OrbitCameraCommand {
-    public static ArgumentBuilder<FabricClientCommandSource, ?> build() {
+    public static ArgumentBuilder<CommandSourceStack, ?> build() {
         return literal("orbit")
             .then(CommandUtil.cameraNode()
                 .then(argument("position", ClientVec3ArgumentType.vec3(true))
@@ -21,8 +22,10 @@ public class OrbitCameraCommand {
                         .executes(ctx -> {
                             CameraWindow camera = CommandUtil.getCamera(ctx);
 
-                            FabricClientCommandSource cameraSrc = CommandUtil.getSourceForCamera(ctx.getSource(), camera);
-                            Vec3d pos = ClientVec3ArgumentType.getPosArgument(ctx, "position").toAbsolutePos(cameraSrc);
+                            LocalPlayer player = Minecraft.getInstance().player;
+                            ClientLevel level = Minecraft.getInstance().level;
+                            
+                            Vec3 pos = ClientVec3ArgumentType.getPosArgument(ctx, "position").toAbsolutePos(player, level);
 
                             float period = FloatArgumentType.getFloat(ctx, "period");
 
@@ -34,7 +37,7 @@ public class OrbitCameraCommand {
                         }))));
     }
 
-    private static double rad2d(Vec3d a, Vec3d b) {
+    private static double rad2d(Vec3 a, Vec3 b) {
         double x = b.x - a.x;
         double z = b.z - a.z;
 
