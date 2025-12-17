@@ -1,16 +1,13 @@
 package me.basiqueevangelist.windowapi;
 
-import net.fabricmc.fabric.api.event.Event;
-import net.fabricmc.fabric.api.event.EventFactory;
+import net.neoforged.bus.api.Event;
 
-public interface WindowFramebufferResized {
-    void onFramebufferResized(int newWidth, int newHeight);
+public class WindowFramebufferResized extends Event {
+    public final int width;
+    public final int height;
 
-    static Event<WindowFramebufferResized> newEvent() {
-        return EventFactory.createArrayBacked(WindowFramebufferResized.class, subscribers -> (newWidth, newHeight) -> {
-            for (var subscriber : subscribers) {
-                subscriber.onFramebufferResized(newWidth, newHeight);
-            }
-        });
+    public WindowFramebufferResized(int width, int height) {
+        this.width = width;
+        this.height = height;
     }
 }
