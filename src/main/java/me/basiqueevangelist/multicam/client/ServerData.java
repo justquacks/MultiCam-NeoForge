@@ -1,28 +1,33 @@
 package me.basiqueevangelist.multicam.client;
 
 import me.basiqueevangelist.multicam.common.MultiCamUsageS2CPacket;
-import net.fabricmc.fabric.api.client.networking.v1.ClientLoginConnectionEvents;
-import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
-import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
+import net.neoforged.neoforge.network.handling.IPayloadContext;
+import net.neoforged.neoforge.network.registration.PayloadRegistrar;
 import org.jetbrains.annotations.Nullable;
 
 public class ServerData {
     private static @Nullable MultiCamUsageS2CPacket PACKET;
 
-    public static void init() {
-        ClientPlayNetworking.registerGlobalReceiver(MultiCamUsageS2CPacket.ID, (packet, context) -> {
+    public static void registerPayloads(PayloadRegistrar registrar) {
+        registrar.playToClient(
+            MultiCamUsageS2CPacket.TYPE,
+            MultiCamUsageS2CPacket.STREAM_CODEC,
+            ServerData::handleUsagePacket
+        );
+    }
+
+    private static void handleUsagePacket(MultiCamUsageS2CPacket packet, IPayloadContext context) {
+        context.enqueueWork(() -> {
             ServerData.PACKET = packet;
 
             if (!packet.canUse()) {
                 MultiCam.closeAllWindows();
             }
         });
+    }
 
-        ClientPlayConnectionEvents.DISCONNECT.register(
-            (handler, client) -> PACKET = null);
-
-        ClientLoginConnectionEvents.DISCONNECT.register(
-            (handler, client) -> PACKET = null);
+    public static void onDisconnect() {
+        PACKET = null;
     }
 
     public static boolean canUse(boolean defaultValue) {
